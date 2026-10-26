@@ -1,4 +1,5 @@
 // Se ejecuta antes de `npm run dev`: prepara .env, aplica migraciones y carga el seed la primera vez.
+import { config as loadEnv } from 'dotenv';
 import { execSync } from 'node:child_process';
 import { copyFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -10,6 +11,10 @@ if (!existsSync(env)) {
   copyFileSync(resolve(raiz, '.env.example'), env);
   console.log('› Se creó apps/api/.env a partir de .env.example');
 }
+// Se carga explícitamente (después de crearlo): el cliente de Prisma solo lee el .env si ya existía
+// al ejecutar `prisma generate` en `npm install`, y en un clon nuevo todavía no existe.
+// No sobrescribe variables ya definidas en el entorno.
+loadEnv({ path: env });
 
 const ejecutar = (cmd) => execSync(cmd, { cwd: raiz, stdio: 'inherit' });
 const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
