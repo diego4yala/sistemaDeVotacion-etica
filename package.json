@@ -1,0 +1,26 @@
+{
+  "name": "sistema-votacion-electivos",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Sondeo de demanda de cursos electivos — Ingeniería Informática PUCP",
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "predev": "npm run setup -w apps/api",
+    "dev": "concurrently -k -n api,web -c blue,green \"npm run dev -w apps/api\" \"npm run dev -w apps/web\"",
+    "build": "npm run build -w apps/api && npm run build -w apps/web",
+    "test": "npm run test -w apps/api",
+    "test:e2e": "npm run test:e2e -w apps/api",
+    "seed": "npm run seed -w apps/api",
+    "db:reset": "npm run db:reset -w apps/api",
+    "lint": "npm run typecheck -w apps/api && npm run typecheck -w apps/web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.5"
+  }
+}
