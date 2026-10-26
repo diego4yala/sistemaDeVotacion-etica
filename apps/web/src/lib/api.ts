@@ -1,0 +1,122 @@
+import type {
+  AlumnoPadron,
+  Aptitud,
+  CursoCoord,
+  DetalleAlumno,
+  DetalleCursoCoord,
+  ElectivoAlumno,
+  EstadoAlumno,
+  Franja,
+  MiVoto,
+  PreviewImportacion,
+  Proceso,
+  ResultadosCoord,
+  ResultadosPublicos,
+  TipoCurso,
+  TipoImportacion,
+  Usuario,
+  Creditos,
+} from './tipos';
+
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+    public detalles: string[] = [],
+  ) {
+    super(message);
+  }
+}
+
+async function solicitar<T>(ruta: string, opciones: RequestInit = {}): Promise<T> {
+  const esFormData = opciones.body instanceof FormData;
+  const res = await fetch(`/api${ruta}`, {
+    credentials: 'same-origin',
+    ...opciones,
+    headers: {
+      Accept: 'application/json',
+      ...(opciones.body && !esFormData ? { 'Content-Type': 'application/json' } : {}),
+      ...opciones.headers,
+    },
+  });
+  if (res.status === 204) return undefined as T;
+  const texto = await res.text();
+  const cuerpo = texto ? JSON.parse(texto) : null;
+  if (!res.ok) {
+    const mensaje = cuerpo?.message;
+    const lista: string[] = Array.isArray(mensaje) ? mensaje : mensaje ? [String(mensaje)] : [];
+    const principal =
+      res.status === 413 ? 'El archivo supera el máximo de 5 MB' : lista[0] ?? cuerpo?.error ?? `Error ${res.status}`;
+    throw new ApiError(res.status, principal, lista);
+  }
+  return cuerpo as T;
+}
+
+const get = <T>(ruta: string) => solicitar<T>(ruta);
+const post = <T>(ruta: string, body?: unknown) =>
+  solicitar<T>(ruta, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) });
+const patch = <T>(ruta: string, body: unknown) => solicitar<T>(ruta, { method: 'PATCH', body: JSON.stringify(body) });
+
+const qs = (params: Record<string, string | undefined>) => {
+  const p = new URLSearchParams(Object.entries(params).filter(([, v]) => v) as [string, string][]);
+  const s = p.toString();
+  return s ? `?${s}` : '';
+};
+
+export const api = {
+  // Autenticación
+  login: (codigo: string, password: string) => post<Usuario>('/auth/login', { codigo, password }),
+  logout: () => post<void>('/auth/logout'),
+  me: () => get<Usuario>('/auth/me'),
+  procesoActivo: () => get<Proceso | null>('/procesos/activo'),
+
+  // Alumno
+  estadoAlumno: () => get<EstadoAlumno>('/alumno/estado'),
+  aceptarTerminos: () => post('/alumno/terminos'),
+  electivos: () => get<{ creditos: Creditos; electivos: ElectivoAlumno[] }>('/alumno/electivos'),
+  electivo: (codigo: string) => get<ElectivoAlumno & { creditosAlumno: Creditos }>(`/alumno/electivos/${encodeURIComponent(codigo)}`),
+  votar: (cursoCodigo: string, franjas: Franja[]) => post<MiVoto>('/alumno/votos', { cursoCodigo, franjas }),
+  misVotos: () => get<MiVoto[]>('/alumno/votos'),
+  resultadosPublicos: () => get<ResultadosPublicos>('/resultados/publicos'),
+
+  // Coordinador
+  procesos: () => get<Proceso[]>('/coord/procesos'),
+  crearProceso: (datos: ProcesoForm) => post<Proceso>('/coord/procesos', datos),
+  editarProceso: (id: string, datos: Partial<ProcesoForm>) => patch<Proceso>(`/coord/procesos/${id}`, datos),
+  cambiarEstado: (id: string, estado: Proceso['estado']) => patch<Proceso>(`/coord/procesos/${id}/estado`, { estado }),
+
+  previewImportacion: (tipo: TipoImportacion, archivo: File, procesoId?: string) => {
+    const fd = new FormData();
+    fd.append('archivo', archivo);
+    return solicitar<PreviewImportacion>(`/coord/import/${tipo}/preview${qs({ procesoId })}`, { method: 'POST', body: fd });
+  },
+  confirmarImportacion: (tipo: TipoImportacion, token: string) =>
+    post<Record<string, unknown>>(`/coord/import/${tipo}/confirmar`, { token }),
+  urlPlantilla: (tipo: TipoImportacion) => `/api/coord/import/${tipo}/plantilla`,
+
+  cursos: (tipo?: TipoCurso) => get<CursoCoord[]>(`/coord/cursos${qs({ tipo })}`),
+  editarCurso: (codigo: string, datos: Partial<Pick<CursoCoord, 'nombre' | 'creditos' | 'descripcion'>> & { requisitosTexto?: string }) =>
+    patch<CursoCoord>(`/coord/cursos/${encodeURIComponent(codigo)}`, datos),
+
+  padron: (procesoId?: string) =>
+    get<{ proceso: { id: string; nombre: string; maxCursos: number }; alumnos: AlumnoPadron[] }>(`/coord/padron${qs({ procesoId })}`),
+  detalleAlumno: (codigo: string, procesoId?: string) =>
+    get<DetalleAlumno>(`/coord/padron/${encodeURIComponent(codigo)}${qs({ procesoId })}`),
+
+  resultadosCoord: (procesoId?: string, aptitud?: Aptitud) =>
+    get<ResultadosCoord>(`/coord/resultados${qs({ procesoId, aptitud })}`),
+  detalleCurso: (codigo: string, procesoId?: string) =>
+    get<DetalleCursoCoord>(`/coord/resultados/${encodeURIComponent(codigo)}${qs({ procesoId })}`),
+  urlExportResultados: (procesoId?: string) => `/api/coord/export/resultados.xlsx${qs({ procesoId })}`,
+  urlExportCurso: (codigo: string, procesoId?: string) =>
+    `/api/coord/export/cursos/${encodeURIComponent(codigo)}/votantes.xlsx${qs({ procesoId })}`,
+};
+
+export interface ProcesoForm {
+  nombre: string;
+  cicloObjetivo: string;
+  fechaInicio: string;
+  fechaFin: string;
+  maxCursos: number;
+  maxFranjas: number;
+}
