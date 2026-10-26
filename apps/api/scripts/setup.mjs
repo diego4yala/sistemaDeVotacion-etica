@@ -24,7 +24,9 @@ for (;;) {
   } catch (e) {
     if (++intentos >= 15) {
       console.error(String(e.stderr ?? e.message));
-      console.error('✖ No se pudo conectar a PostgreSQL. ¿Ejecutaste `docker compose up -d`?');
+      console.error('✖ No se pudo aplicar las migraciones en PostgreSQL.');
+      console.error('  Verifica que la base esté en ejecución (`docker compose up -d`) y que DATABASE_URL');
+      console.error('  en apps/api/.env tenga el usuario, la contraseña y la base correctos.');
       process.exit(1);
     }
     if (intentos === 1) console.log('› Esperando a PostgreSQL…');

@@ -4,7 +4,38 @@ Sondeo de demanda de cursos electivos: los alumnos aptos votan por hasta 5 elect
 
 La especificación completa está en [`docs/ESPECIFICACION.md`](docs/ESPECIFICACION.md) y el plan de estudios en [`docs/PLAN_DE_ESTUDIOS.md`](docs/PLAN_DE_ESTUDIOS.md).
 
-## Cómo levantarlo
+## Inicio rápido en Windows (doble clic)
+
+### Requisitos (solo la primera vez)
+
+1. **Node.js 20 o superior** (versión LTS): <https://nodejs.org>. Al terminar la instalación, cierra y vuelve a abrir cualquier ventana de consola.
+2. **Git**: <https://git-scm.com/download/win>, para clonar el repositorio.
+3. **Una base PostgreSQL**. Elige una opción:
+   - **Opción A (recomendada): Docker Desktop**: <https://www.docker.com/products/docker-desktop>. Ábrelo y espera a que diga *Engine running*. `iniciar.bat` levanta la base solo (`docker compose up -d`).
+   - **Opción B: PostgreSQL 16 instalado en Windows.** Crea un usuario y una base, copia `apps\api\.env.example` como `apps\api\.env` y pon tu URL en `DATABASE_URL` (por ejemplo `postgresql://USUARIO:CLAVE@localhost:5432/BASE?schema=public`).
+
+### Clonar y ejecutar
+
+```bat
+git clone https://github.com/diego4yala/sistemaDeVotacion-etica.git
+cd sistemaDeVotacion-etica
+```
+
+Después, haz **doble clic en `iniciar.bat`** (o ejecútalo desde la consola). El script:
+
+1. Verifica que estén instalados Node.js 20+ y npm.
+2. Ejecuta `npm install` si faltan dependencias o si `package-lock.json` cambió.
+3. Comprueba que PostgreSQL responda en la `DATABASE_URL` configurada. Si no responde y la base es local, la levanta con Docker; si no hay Docker, explica qué instalar.
+4. Verifica que los puertos 3000 (API) y 5173 (web) estén libres.
+5. Ejecuta `npm run dev`. Este comando crea `apps\api\.env` desde `.env.example` **solo si no existe**, aplica las migraciones, carga los datos de prueba solo si la base está vacía y levanta la API y la web.
+
+Cuando la web está lista se abre el navegador en <http://localhost:5173>. Para detener la aplicación, presiona **Ctrl+C** en la ventana. Si algo falla, la ventana se queda abierta con el mensaje de error.
+
+Las siguientes veces basta con volver a hacer doble clic en `iniciar.bat`: no reinstala ni vuelve a sembrar datos si no hace falta. Si no quieres que se abra el navegador, ejecútalo como `iniciar.bat --sin-navegador`.
+
+> La lógica está en `scripts/iniciar.mjs`, un script de Node, así que en Linux o macOS se usa igual: `node scripts/iniciar.mjs`.
+
+## Cómo levantarlo manualmente
 
 Requisitos: Node 20+, Docker.
 
