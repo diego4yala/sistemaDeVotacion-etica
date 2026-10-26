@@ -1,0 +1,174 @@
+// Modelo de datos — sección 9 de docs/ESPECIFICACION.md
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Rol {
+  ALUMNO
+  COORDINADOR
+}
+
+enum TipoCurso {
+  OBLIGATORIO
+  ELECTIVO
+  ELECTIVO_GENERALES
+  ELECTIVO_LIBRE
+}
+
+enum TipoRequisito {
+  APROBADO
+  CURSADO_NOTA_MIN_8
+  APROBADO_O_SIMULTANEO
+  CURSADO_O_SIMULTANEO
+  CREDITOS_MIN
+}
+
+enum EstadoProceso {
+  BORRADOR
+  ABIERTO
+  CERRADO
+}
+
+enum Aptitud {
+  CONFIRMADO
+  CONDICIONAL
+  NO_APTO
+}
+
+enum Franja {
+  MANANA
+  MEDIA_MANANA
+  MEDIODIA
+  TARDE
+  NOCHE
+}
+
+model Usuario {
+  id           String               @id @default(uuid())
+  codigo       String               @unique
+  nombres      String
+  apellidos    String
+  correo       String?
+  passwordHash String
+  rol          Rol
+  createdAt    DateTime             @default(now())
+  padron       PadronAlumno[]
+  historial    HistorialItem[]
+  aceptaciones AceptacionTerminos[]
+  votos        Voto[]
+}
+
+model Curso {
+  codigo          String      @id
+  nombre          String
+  creditos        Decimal     @db.Decimal(4, 2)
+  tipo            TipoCurso
+  ciclo           Int?
+  grupo           String? // EH1, EH2, TEO
+  requisitosTexto String?
+  descripcion     String?
+  requisitos      Requisito[]
+  votos           Voto[]
+}
+
+model Requisito {
+  id              String        @id @default(uuid())
+  cursoCodigo     String
+  orden           Int           @default(0)
+  texto           String
+  tipo            TipoRequisito
+  cursoRequerido  String? // código, puede no existir en Curso
+  creditosMinimos Int?
+  curso           Curso         @relation(fields: [cursoCodigo], references: [codigo], onDelete: Cascade)
+
+  @@index([cursoCodigo])
+}
+
+model ProcesoVotacion {
+  id            String               @id @default(uuid())
+  nombre        String // ej. "Electivos 2027-1"
+  cicloObjetivo String // ej. "2027-1"
+  fechaInicio   DateTime
+  fechaFin      DateTime
+  maxCursos     Int                  @default(5)
+  maxFranjas    Int                  @default(2)
+  estado        EstadoProceso        @default(BORRADOR)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  padron        PadronAlumno[]
+  historial     HistorialItem[]
+  aceptaciones  AceptacionTerminos[]
+  votos         Voto[]
+}
+
+// Alumno habilitado en un proceso
+model PadronAlumno {
+  procesoId String
+  usuarioId String
+  proceso   ProcesoVotacion @relation(fields: [procesoId], references: [id], onDelete: Cascade)
+  usuario   Usuario         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@id([procesoId, usuarioId])
+}
+
+model HistorialItem {
+  id          String          @id @default(uuid())
+  procesoId   String
+  usuarioId   String
+  cursoCodigo String // sin FK: puede no estar en el catálogo
+  nota        Int? // null = en curso
+  proceso     ProcesoVotacion @relation(fields: [procesoId], references: [id], onDelete: Cascade)
+  usuario     Usuario         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([procesoId, usuarioId])
+}
+
+model AceptacionTerminos {
+  procesoId  String
+  usuarioId  String
+  version    Int
+  aceptadoEn DateTime        @default(now())
+  proceso    ProcesoVotacion @relation(fields: [procesoId], references: [id], onDelete: Cascade)
+  usuario    Usuario         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@id([procesoId, usuarioId])
+}
+
+model Voto {
+  id          String          @id @default(uuid())
+  procesoId   String
+  usuarioId   String
+  cursoCodigo String
+  aptitud     Aptitud // snapshot al momento de votar
+  createdAt   DateTime        @default(now())
+  franjas     VotoFranja[]
+  proceso     ProcesoVotacion @relation(fields: [procesoId], references: [id], onDelete: Cascade)
+  usuario     Usuario         @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+  curso       Curso           @relation(fields: [cursoCodigo], references: [codigo], onDelete: Restrict)
+
+  @@unique([procesoId, usuarioId, cursoCodigo])
+  @@index([procesoId, cursoCodigo])
+}
+
+model VotoFranja {
+  votoId String
+  franja Franja
+  voto   Voto   @relation(fields: [votoId], references: [id], onDelete: Cascade)
+
+  @@id([votoId, franja])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  usuarioId String?
+  accion    String // LOGIN_OK, LOGIN_FAIL, IMPORT_CATALOGO, VOTO, CAMBIO_ESTADO_PROCESO...
+  detalle   Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
